@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 *~
 *.pth
+# Project-specific ignores
+auto_models/
+output*.png
+test.jpg
+image2.jpg

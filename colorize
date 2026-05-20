@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Simple wrapper to run colorization
+# Usage: ./colorize <target_image> <reference_image> [output_image]
+
+if [ "$#" -lt 2 ]; then
+    echo "Usage: ./colorize <target_image> <reference_image> [output_image]"
+    echo "Example: ./colorize sample_videos/clips/v32/1415.png sample_videos/ref/v32/01.jpg"
+    exit 1
+fi
+
+TARGET=$1
+REF=$2
+OUTPUT=$3
+
+if [ -z "$OUTPUT" ]; then
+    python3 colorize_image.py --target "$TARGET" --ref "$REF"
+else
+    python3 colorize_image.py --target "$TARGET" --ref "$REF" --output "$OUTPUT"
+fi
