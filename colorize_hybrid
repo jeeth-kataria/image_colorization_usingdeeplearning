@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# HYBRID SOTA Colorization Wrapper
+# Usage: ./colorize_hybrid <target_image> [output_image]
+
+if [ "$#" -lt 1 ]; then
+    echo "Usage: ./colorize_hybrid <target_image> [output_image]"
+    echo "Example: ./colorize_hybrid test.jpg"
+    exit 1
+fi
+
+TARGET=$1
+OUTPUT=$2
+
+if [ -z "$OUTPUT" ]; then
+    python3 colorize_hybrid.py --target "$TARGET"
+else
+    python3 colorize_hybrid.py --target "$TARGET" --output "$OUTPUT"
+fi
