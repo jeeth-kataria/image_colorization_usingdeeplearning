@@ -15,10 +15,11 @@ def main():
     
     args = parser.parse_args()
     
-    # Generate timestamped filename if none provided
+    # Generate unique filename if none provided
     if args.output is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        args.output = f"vibrant_{timestamp}.png"
+        target_name = os.path.splitext(os.path.basename(args.target))[0]
+        args.output = f"{target_name}_vibrant_{timestamp}.png"
 
     print(f"Using device: {args.device}")
     print("Initializing VIBRANT AI (DDColor SOTA Model)...")

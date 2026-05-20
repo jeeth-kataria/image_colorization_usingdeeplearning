@@ -55,10 +55,11 @@ def main():
     
     args = parser.parse_args()
 
-    # Generate timestamped filename if none provided
+    # Generate unique filename if none provided
     if args.output is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        args.output = f"output_{timestamp}.png"
+        target_name = os.path.splitext(os.path.basename(args.target))[0]
+        args.output = f"{target_name}_auto_{timestamp}.png"
 
     device = torch.device(args.device)
     print(f"Using device: {device}")

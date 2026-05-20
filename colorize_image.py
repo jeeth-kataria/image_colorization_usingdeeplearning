@@ -42,7 +42,8 @@ def main():
 
     if args.output is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        args.output = f"manual_hybrid_{timestamp}.png"
+        target_name = os.path.splitext(os.path.basename(args.target))[0]
+        args.output = f"{target_name}_manual_hybrid_{timestamp}.png"
 
     print(f"Using device: {device}")
 
