@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# VIBRANT SOTA Colorization Wrapper (2023 DDColor)
+# Usage: ./colorize_vibrant <target_image> [output_image]
+
+if [ "$#" -lt 1 ]; then
+    echo "Usage: ./colorize_vibrant <target_image> [output_image]"
+    echo "Example: ./colorize_vibrant test.jpg"
+    exit 1
+fi
+
+TARGET=$1
+OUTPUT=$2
+
+if [ -z "$OUTPUT" ]; then
+    python3 colorize_vibrant.py --target "$TARGET"
+else
+    python3 colorize_vibrant.py --target "$TARGET" --output "$OUTPUT"
+fi

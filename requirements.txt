@@ -17,3 +17,4 @@ future
 numba
 pypng
 colorizers
+modelscope
