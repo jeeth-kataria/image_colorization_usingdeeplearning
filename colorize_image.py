@@ -5,24 +5,22 @@ import torchvision.transforms as transform_lib
 from PIL import Image
 import numpy as np
 import cv2
+from datetime import datetime
 
 import lib.TestTransforms as transforms
 from models.ColorVidNet import ColorVidNet
 from models.FrameColor import frame_colorization
 from models.NonlocalNet import VGG19_pytorch, WarpNet
 from utils.util import lab2rgb_transpose_mc, tensor_lab2rgb, uncenter_l
-import cv2
-from datetime import datetime
+from utils.util_distortion import Normalize, RGB2Lab, ToTensor
 
-import lib.TestTransforms as transforms
-...
 def main():
     parser = argparse.ArgumentParser(description="Colorize a single image using an exemplar reference image.")
     parser.add_argument("--target", type=str, required=True, help="Path to the target grayscale image.")
     parser.add_argument("--ref", type=str, required=True, help="Path to the reference color image.")
     parser.add_argument("--output", type=str, default=None, help="Path to save the output image.")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Device to run on (cuda or cpu).")
-
+    
     args = parser.parse_args()
 
     # Generate timestamped filename if none provided
@@ -33,6 +31,7 @@ def main():
     device = torch.device(args.device)
     print(f"Using device: {device}")
 
+    # Load networks
     nonlocal_net = WarpNet(1)
     colornet = ColorVidNet(7)
     vggnet = VGG19_pytorch()
@@ -50,8 +49,6 @@ def main():
         param.requires_grad = False
 
     # Preprocessing transform
-    # We remove CenterPad and CenterCrop because they crop the image (causing the 'zoom' effect)
-    # Instead, we will resize directly to the model size and resize back at the end.
     model_size = (216 * 2, 384 * 2) # Height, Width
     
     transform_to_model = transforms.Compose([
