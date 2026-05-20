@@ -2,10 +2,11 @@ import os
 import argparse
 import torch
 import torchvision.transforms as transform_lib
-from PIL import Image
+from PIL import Image, ImageEnhance
 import numpy as np
 import cv2
 from datetime import datetime
+from skimage.exposure import match_histograms
 
 import lib.TestTransforms as transforms
 from models.ColorVidNet import ColorVidNet
@@ -14,29 +15,47 @@ from models.NonlocalNet import VGG19_pytorch, WarpNet
 from utils.util import lab2rgb_transpose_mc, tensor_lab2rgb, uncenter_l
 from utils.util_distortion import Normalize, RGB2Lab, ToTensor
 
+def smart_color_transfer(source_img, target_img):
+    """Adapt source colors to target histogram for natural blending."""
+    src_arr = np.array(source_img)
+    tgt_arr = np.array(target_img)
+    matched = match_histograms(src_arr, tgt_arr, channel_axis=-1)
+    return Image.fromarray(matched.astype(np.uint8))
+
+def edge_preserving_smooth(img_np):
+    """Clean up color bleeding using bilateral filtering."""
+    return cv2.bilateralFilter(img_np, d=9, sigmaColor=75, sigmaSpace=75)
+
+def boost_saturation(img_np, factor=1.3):
+    """Enhance vibrancy of the final result."""
+    img_pil = Image.fromarray(img_np)
+    enhancer = ImageEnhance.Color(img_pil)
+    return np.array(enhancer.enhance(factor))
+
 def main():
-    parser = argparse.ArgumentParser(description="Colorize a single image using an exemplar reference image.")
+    parser = argparse.ArgumentParser(description="Smart Manual Colorize: Precise control with AI polish.")
     parser.add_argument("--target", type=str, required=True, help="Path to the target grayscale image.")
     parser.add_argument("--ref", type=str, required=True, help="Path to the reference color image.")
     parser.add_argument("--output", type=str, default=None, help="Path to save the output image.")
-    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Device to run on (cuda or cpu).")
+    parser.add_argument("--sat", type=float, default=1.3, help="Saturation boost factor.")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Device to run on.")
     
     args = parser.parse_args()
+    device = torch.device(args.device)
 
     # Generate timestamped filename if none provided
     if args.output is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        args.output = f"output_{timestamp}.png"
+        args.output = f"manual_{timestamp}.png"
 
-    device = torch.device(args.device)
     print(f"Using device: {device}")
 
     # Load networks
+    print("Loading models...")
     nonlocal_net = WarpNet(1)
     colornet = ColorVidNet(7)
     vggnet = VGG19_pytorch()
 
-    # Load pre-trained weights
     vggnet.load_state_dict(torch.load('data/vgg19_conv.pth', map_location=device))
     nonlocal_net.load_state_dict(torch.load('checkpoints/video_moredata_l1/nonlocal_net_iter_76000.pth', map_location=device))
     colornet.load_state_dict(torch.load('checkpoints/video_moredata_l1/colornet_iter_76000.pth', map_location=device))
@@ -48,24 +67,22 @@ def main():
     for param in vggnet.parameters():
         param.requires_grad = False
 
-    # Preprocessing transform
-    model_size = (216 * 2, 384 * 2) # Height, Width
-    
-    transform_to_model = transforms.Compose([
-        RGB2Lab(),
-        ToTensor(),
-        Normalize()
-    ])
+    # Preprocessing
+    model_size = (216 * 2, 384 * 2)
+    transform_to_model = transforms.Compose([RGB2Lab(), ToTensor(), Normalize()])
 
     # Load images
     target_img_orig = Image.open(args.target).convert('RGB')
     orig_width, orig_height = target_img_orig.size
-    
     ref_img_orig = Image.open(args.ref).convert('RGB')
 
-    # Resize to model input size (Height, Width)
+    # Smart Adaptation: Align reference lighting to target
+    print("Adapting reference colors to match target lighting...")
+    ref_img_adapted = smart_color_transfer(ref_img_orig, target_img_orig)
+
+    # Resize to model input size
     target_img = target_img_orig.resize((model_size[1], model_size[0]), Image.BILINEAR)
-    ref_img = ref_img_orig.resize((model_size[1], model_size[0]), Image.BILINEAR)
+    ref_img = ref_img_adapted.resize((model_size[1], model_size[0]), Image.BILINEAR)
 
     # Process reference image
     IB_lab_large = transform_to_model(ref_img).unsqueeze(0).to(device)
@@ -86,18 +103,11 @@ def main():
     I_last_lab_predict = torch.zeros_like(IA_lab).to(device)
 
     # Colorization
-    print("Running colorization...")
+    print("Running precision colorization...")
     with torch.no_grad():
         I_current_ab_predict, _, _ = frame_colorization(
-            IA_lab,
-            I_reference_lab,
-            I_last_lab_predict,
-            features_B,
-            vggnet,
-            nonlocal_net,
-            colornet,
-            feature_noise=0,
-            temperature=1e-10,
+            IA_lab, I_reference_lab, I_last_lab_predict, features_B,
+            vggnet, nonlocal_net, colornet, feature_noise=0, temperature=1e-10,
         )
 
     # Upsample and Post-process
@@ -109,9 +119,15 @@ def main():
     # Resize back to original dimensions
     output_img = cv2.resize(output_img_resized, (orig_width, orig_height), interpolation=cv2.INTER_LANCZOS4)
 
+    # Final Smart Polish
+    print("Polishing image quality...")
+    output_img = edge_preserving_smooth(output_img)
+    if args.sat > 1.0:
+        output_img = boost_saturation(output_img, args.sat)
+
     # Save output
     cv2.imwrite(args.output, cv2.cvtColor(output_img, cv2.COLOR_RGB2BGR))
-    print(f"Successfully saved colorized image to: {args.output} (Size: {orig_width}x{orig_height})")
+    print(f"DONE! Smart manual colorization saved to: {args.output}")
 
 if __name__ == "__main__":
     main()
